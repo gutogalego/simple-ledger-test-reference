@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ledger API Tester</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        line-height: 1.5;
+      }
+      .card {
+        border: 1px solid #ccc;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+      }
+      h2 {
+        margin-top: 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+      }
+      button {
+        padding: 10px 20px;
+        cursor: pointer;
+        background: #0070f3;
+        color: white;
+        border: none;
+        border-radius: 4px;
+      }
+      button:hover {
+        background: #0051a2;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 10px;
+        overflow-x: auto;
+        border-radius: 4px;
+      }
+      .entry-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .entry-row input,
+      .entry-row select {
+        margin-bottom: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Ledger API Tester</h1>
+
+    <div class="card">
+      <h2>1. Create Account</h2>
+      <form id="createAccountForm">
+        <label>Name (Optional)</label>
+        <input type="text" name="name" placeholder="e.g. Cash" />
+
+        <label>Direction</label>
+        <select name="direction">
+          <option value="debit">Debit</option>
+          <option value="credit">Credit</option>
+        </select>
+
+        <label>ID (Optional UUID)</label>
+        <input type="text" name="id" placeholder="Leave empty to generate" />
+
+        <button type="submit">Create Account</button>
+      </form>
+      <pre id="createAccountResult">Response will appear here...</pre>
+    </div>
+
+    <div class="card">
+      <h2>2. Get Account</h2>
+      <form id="getAccountForm">
+        <label>Account ID</label>
+        <input type="text" name="id" required placeholder="UUID" />
+        <button type="submit">Get Account</button>
+      </form>
+      <pre id="getAccountResult">Response will appear here...</pre>
+    </div>
+
+    <div class="card">
+      <h2>3. List All Accounts</h2>
+      <button onclick="listAllAccounts()">Fetch All Accounts</button>
+      <pre id="listAccountsResult">Click button to load...</pre>
+    </div>
+
+    <div class="card">
+      <h2>4. Create Transaction</h2>
+      <form id="createTransactionForm">
+        <label>Name (Optional)</label>
+        <input type="text" name="name" placeholder="e.g. Deposit" />
+
+        <label>ID (Optional UUID)</label>
+        <input type="text" name="id" placeholder="Leave empty to generate" />
+
+        <h3>Entries</h3>
+        <div id="entriesContainer">
+          <!-- Entries will be added here -->
+        </div>
+        <button
+          type="button"
+          onclick="addEntry()"
+          style="background: #666; margin-bottom: 10px"
+        >
+          + Add Entry
+        </button>
+        <br />
+
+        <button type="submit">Create Transaction</button>
+      </form>
+      <pre id="createTransactionResult">Response will appear here...</pre>
+    </div>
+
+    <div class="card">
+      <h2>5. List All Transactions</h2>
+      <button onclick="listAllTransactions()">Fetch All Transactions</button>
+      <pre id="listTransactionsResult">Click button to load...</pre>
+    </div>
+
+    <script>
+      const API_URL = "http://localhost:3000";
+
+      // Helper to handle form submission
+      async function handleSubmit(
+        formId,
+        endpoint,
+        method,
+        resultId,
+        processBody = null
+      ) {
+        const form = document.getElementById(formId);
+        const resultPre = document.getElementById(resultId);
+
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          resultPre.textContent = "Loading...";
+
+          const formData = new FormData(form);
+          let body = {};
+
+          // Convert FormData to JSON object, skipping empty optional fields
+          formData.forEach((value, key) => {
+            if (value) body[key] = value;
+          });
+
+          // Custom body processing if needed (e.g. for nested arrays)
+          if (processBody) {
+            body = processBody(form);
+          }
+
+          try {
+            // For GET requests with ID in path
+            let url = `${API_URL}${endpoint}`;
+            let options = {
+              method,
+              headers: { "Content-Type": "application/json" },
+            };
+
+            if (method === "GET" && body.id) {
+              url += `/${body.id}`;
+              delete options.body;
+            } else if (method !== "GET") {
+              options.body = JSON.stringify(body);
+            }
+
+            const res = await fetch(url, options);
+            const data = await res.json();
+            resultPre.textContent = JSON.stringify(data, null, 2);
+          } catch (err) {
+            resultPre.textContent = "Error: " + err.message;
+          }
+        });
+      }
+
+      // 1. Create Account
+      handleSubmit(
+        "createAccountForm",
+        "/accounts",
+        "POST",
+        "createAccountResult"
+      );
+
+      // 2. Get Account
+      handleSubmit("getAccountForm", "/accounts", "GET", "getAccountResult");
+
+      // 3. List All Accounts
+      async function listAllAccounts() {
+        const resultPre = document.getElementById("listAccountsResult");
+        resultPre.textContent = "Loading...";
+
+        try {
+          const res = await fetch(`${API_URL}/accounts`);
+          const data = await res.json();
+          resultPre.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          resultPre.textContent = "Error: " + err.message;
+        }
+      }
+
+      // 4. Create Transaction
+      function addEntry() {
+        const container = document.getElementById("entriesContainer");
+        const div = document.createElement("div");
+        div.className = "entry-row";
+        div.innerHTML = `
+                <select class="entry-direction">
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
+                </select>
+                <input type="text" class="entry-account-id" placeholder="Account ID" required>
+                <input type="number" class="entry-amount" placeholder="Amount" required>
+                <button type="button" onclick="this.parentElement.remove()" style="background: #ff4444; padding: 5px 10px;">X</button>
+            `;
+        container.appendChild(div);
+      }
+
+      // Add 2 default entries
+      addEntry();
+      addEntry();
+
+      handleSubmit(
+        "createTransactionForm",
+        "/transactions",
+        "POST",
+        "createTransactionResult",
+        (form) => {
+          const name = form.querySelector('[name="name"]').value;
+          const id = form.querySelector('[name="id"]').value;
+
+          const entries = [];
+          document.querySelectorAll(".entry-row").forEach((row) => {
+            entries.push({
+              direction: row.querySelector(".entry-direction").value,
+              account_id: row.querySelector(".entry-account-id").value,
+              amount: Number(row.querySelector(".entry-amount").value),
+            });
+          });
+
+          const body = { entries };
+          if (name) body.name = name;
+          if (id) body.id = id;
+          return body;
+        }
+      );
+
+      // 5. List All Transactions
+      async function listAllTransactions() {
+        const resultPre = document.getElementById("listTransactionsResult");
+        resultPre.textContent = "Loading...";
+
+        try {
+          const res = await fetch(`${API_URL}/transactions`);
+          const data = await res.json();
+          resultPre.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          resultPre.textContent = "Error: " + err.message;
+        }
+      }
+    </script>
+  </body>
+</html>
