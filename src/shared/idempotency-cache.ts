@@ -1,14 +1,5 @@
 import NodeCache from "node-cache";
-import { createHash } from "node:crypto";
-
-/**
- * Generate a hash key from the provided data
- * Ensures consistent hashing by sorting object keys
- */
-function hashKey(data: any): string {
-  const json = JSON.stringify(data, Object.keys(data).sort());
-  return createHash("sha256").update(json).digest("hex");
-}
+import { hashKey } from "./hashKey";
 
 /**
  * Domain-specific idempotency caches using node-cache
